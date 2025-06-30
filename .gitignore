@@ -151,4 +151,8 @@ cython_debug/
 .AppleDesktop
 Network Trash Folder
 Temporary Items
-.apdisk 
+.apdisk
+
+# Ignore all PDF and DOCX files
+*.pdf
+*.docx 
