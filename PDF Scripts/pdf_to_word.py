@@ -3,9 +3,20 @@ import os
 import pdfplumber
 from docx import Document
 from docx.shared import Inches
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageOps
 import io
 import pytesseract
+import re
+
+
+def clean_toc_line(line):
+    # Match: "Section Title.....12" or "Section Title .......... 12"
+    match = re.match(r'^(.*?)(\.{5,}|\s+)+(\d+)$', line.strip())
+    if match:
+        title = match.group(1).strip()
+        page = match.group(3).strip()
+        return f"{title} .......... {page}"
+    return line
 
 
 def pdf_to_word(pdf_path, docx_path):
@@ -25,11 +36,23 @@ def pdf_to_word(pdf_path, docx_path):
                 # Render page as image for OCR
                 try:
                     page_image = page.to_image(resolution=300).original
-                    ocr_text = pytesseract.image_to_string(page_image)
+                    # Preprocess: convert to grayscale and increase contrast
+                    gray_image = ImageOps.grayscale(page_image)
+                    enhancer = ImageEnhance.Contrast(gray_image)
+                    enhanced_image = enhancer.enhance(2.0)  # Increase contrast
+                    # Set Tesseract config for English and improved layout
+                    custom_config = r'--oem 3 --psm 6'
+                    ocr_text = pytesseract.image_to_string(
+                        enhanced_image, lang='eng', config=custom_config)
                     if ocr_text.strip():
                         print(f"    OCR extracted text from page {page_num}")
                         for line in ocr_text.split('\n'):
-                            document.add_paragraph(line)
+                            # If the line contains a long run of dots, clean it
+                            if re.search(r'\.{5,}', line):
+                                cleaned = clean_toc_line(line)
+                                document.add_paragraph(cleaned)
+                            else:
+                                document.add_paragraph(line)
                     else:
                         print(f"    OCR found no text on page {page_num}")
                 except Exception as e:
